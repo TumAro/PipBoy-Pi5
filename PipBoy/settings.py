@@ -73,7 +73,7 @@ MODULES = {
 
 MODULE_TEXT = ["STAT", "INV", "DATA", "MAP", "RADIO"]
 
-STARTER_MODULE = "boot"
+STARTER_MODULE = "stats" # ! CHANGED BY TUMIN -> CHANGE BACK TO BOOT
 
 ACTIONS = {
     pygame.K_F1: "module_stats",
@@ -414,5 +414,3 @@ holotape_generic = "images\inventory\holotape"
 # if time_past:
 #     max_fps = int(1 / time_past)
 #     print("Holotape render took:", time_past, "max fps:", max_fps)
-
-
