@@ -17,9 +17,16 @@ os.system('sudo chmod 666 /dev/uinput')
 # Setup evdev UInput device for GPIO actions
 ui = UInput()
 
+# THE LINES ARE ADDED BY TUMIN FOR REPLACEMENT OF VCC PORT AT GPIO 21 -PORT 40
+from gpiozero import OutputDevice
+encoder_vcc = OutputDevice(21, initial_value=True)
+# ----------------------------------------------------------------------------
+
+
 # Rotary Encoder GPIO setup
 encoder = RotaryEncoder(a=12, b=16)
 encoder_button = Button(20)  # Using GPIO 20 for encoder click
+
 
 # Define rotary encoder callback
 def rotary_callback():
@@ -74,6 +81,31 @@ knob_buttons = {
     26: e.KEY_F5,
 }
 
+# ! --- TUMIN ADDED THIS LINES ---
+current_tab = 0
+tab_keys = [e.KEY_F1, e.KEY_F2, e.KEY_F3, e.KEY_F4, e.KEY_F5]
+
+# Define knob button callback
+def knob_button_callback(button):
+    global last_knob_event, current_tab
+    if time.time() - last_knob_event < 0.1:
+        return
+    last_knob_event = time.time()
+    pin = button.pin.number
+    if pin == 6:
+        current_tab = (current_tab + 1) % len(tab_keys)
+        key = tab_keys[current_tab]
+        print(f"Tab changed to index {current_tab}")
+    else:
+        key = knob_buttons[pin]
+        print(f"Knob {pin} pressed")
+    ui.write(e.EV_KEY, key, 1)
+    ui.write(e.EV_KEY, key, 0)
+    ui.syn()
+# ------------------------------
+
+
+'''
 # Define knob button callback
 def knob_button_callback(button):
     global last_knob_event
@@ -89,6 +121,8 @@ def knob_button_callback(button):
     ui.write(e.EV_KEY, key, 0)
     ui.syn()
     print(f"Sent {key_name} key")
+'''
+
 
 # Attach the knob button callbacks
 for pin, key in knob_buttons.items():
