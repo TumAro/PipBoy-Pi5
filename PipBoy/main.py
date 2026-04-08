@@ -19,6 +19,7 @@ ui = UInput()
 
 # THE LINES ARE ADDED BY TUMIN FOR REPLACEMENT OF VCC PORT AT GPIO 21 -PORT 40
 from gpiozero import OutputDevice
+import qrcode as qrcode_lib
 encoder_vcc = OutputDevice(21, initial_value=True)
 # ----------------------------------------------------------------------------
 
@@ -51,6 +52,37 @@ encoder.when_rotated = rotary_callback
 last_rotary_event = time.time()
 
 # Define encoder button callback
+encoder1_press_time = 0
+
+def encoder1_pressed():
+    global encoder1_press_time
+    encoder1_press_time = time.time()
+
+def encoder_button_callback():
+    global last_button_event, encoder1_press_time
+    held = time.time() - encoder1_press_time
+    if held > 2.0:
+        print("Long press — shutting down...")
+        os.system("sudo shutdown -h now")
+        return
+    if time.time() - last_button_event < 0.5:
+        return
+    last_button_event = time.time()
+    print("Encoder button pressed")
+    settings.currentmenu += 1
+    if settings.currentmenu > settings.submenucount:
+        settings.currentmenu = 1
+    ui.write(e.EV_KEY, e.KEY_1 + (settings.currentmenu - 1), 1)
+    ui.write(e.EV_KEY, e.KEY_1 + (settings.currentmenu - 1), 0)
+    ui.syn()
+    print(f"Current menu: {settings.currentmenu}, Submenu count: {settings.submenucount}")
+
+encoder_button.when_pressed = encoder1_pressed
+encoder_button.when_released = encoder_button_callback
+last_button_event = time.time()
+
+# --- TUMIN ADDED THE ABOVE LINES ---
+'''
 def encoder_button_callback():
     global last_button_event
     if time.time() - last_button_event < 0.5:
@@ -71,6 +103,7 @@ def encoder_button_callback():
 # Attach the encoder button callback
 encoder_button.when_pressed = encoder_button_callback
 last_button_event = time.time()
+'''
 
 # Additional knob GPIO setup
 knob_buttons = {
@@ -84,21 +117,35 @@ knob_buttons = {
 # --- TUMIN ADDED THIS LINES ---
 current_tab = 0
 tab_keys = [e.KEY_F1, e.KEY_F2, e.KEY_F3, e.KEY_F4, e.KEY_F5]
+qr_visible = False
+encoder2_press_time = 0
 
-# Define knob button callback
+def knob_button_pressed(button):
+    global encoder2_press_time
+    if button.pin.number == 6:
+        encoder2_press_time = time.time()
+
 def knob_button_callback(button):
-    global last_knob_event, current_tab
+    global last_knob_event, current_tab, qr_visible, encoder2_press_time
+    pin = button.pin.number
+    if pin == 6:
+        held = time.time() - encoder2_press_time
+        if held > 1.0:
+            qr_visible = not qr_visible
+            print("QR toggled:", qr_visible)
+        else:
+            current_tab = (current_tab + 1) % len(tab_keys)
+            key = tab_keys[current_tab]
+            ui.write(e.EV_KEY, key, 1)
+            ui.write(e.EV_KEY, key, 0)
+            ui.syn()
+            print(f"Tab changed to index {current_tab}")
+        return
     if time.time() - last_knob_event < 0.1:
         return
     last_knob_event = time.time()
-    pin = button.pin.number
-    if pin == 6:
-        current_tab = (current_tab + 1) % len(tab_keys)
-        key = tab_keys[current_tab]
-        print(f"Tab changed to index {current_tab}")
-    else:
-        key = knob_buttons[pin]
-        print(f"Knob {pin} pressed")
+    key = knob_buttons[pin]
+    print(f"Knob {pin} pressed")
     ui.write(e.EV_KEY, key, 1)
     ui.write(e.EV_KEY, key, 0)
     ui.syn()
@@ -128,6 +175,7 @@ def knob_button_callback(button):
 for pin, key in knob_buttons.items():
     button = Button(pin)
     button.when_pressed = lambda button=button: knob_button_callback(button)
+    button.when_released = lambda button=button: knob_button_callback(button)
 
 last_knob_event = time.time()
 
@@ -178,7 +226,37 @@ def main():
     pygame.quit()
 
 if __name__ == "__main__":
+    pygame.init()
     boy = Pypboy('Pip-Boy 3000 MK IV', settings.WIDTH, settings.HEIGHT)
     print("RUN")
-    boy.run()
-    main()
+
+    # --- TUMIN: Generate QR after pygame init ---
+    qr_img = qrcode_lib.make("https://www.instagram.com/layeraction/")
+    qr_img = qr_img.resize((280, 280))
+    qr_surface = pygame.image.fromstring(qr_img.tobytes(), qr_img.size, qr_img.mode)
+    qr_font = settings.TechMono[18]
+    # --------------------------------------------
+
+    screen = pygame.display.get_surface()
+    clock = pygame.time.Clock()
+    boy.running = True
+    while boy.running:
+        boy.check_gpio_input()
+        for event in pygame.event.get():
+            boy.handle_event(event)
+            if hasattr(boy, 'active'):
+                boy.active.handle_event(event)
+        boy.render()
+        if qr_visible:
+            overlay = pygame.Surface((480, 320), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 210))
+            screen.blit(overlay, (0, 0))
+            screen.blit(qr_surface, (100, 15))
+            label = qr_font.render("@layeraction", True, (0, 230, 0))
+            screen.blit(label, (155, 300))
+        pygame.display.flip()
+        clock.tick(32)
+    try:
+        pygame.mixer.quit()
+    except:
+        pass
