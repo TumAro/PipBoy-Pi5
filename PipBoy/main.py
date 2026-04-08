@@ -118,7 +118,7 @@ knob_buttons = {
 current_tab = 0
 tab_keys = [e.KEY_F1, e.KEY_F2, e.KEY_F3, e.KEY_F4, e.KEY_F5]
 qr_visible = False
-encoder2_press_time = 0
+encoder2_press_time = time.time()
 
 def knob_button_pressed(button):
     global encoder2_press_time
@@ -130,7 +130,7 @@ def knob_button_callback(button):
     pin = button.pin.number
     if pin == 6:
         held = time.time() - encoder2_press_time
-        if held > 1.0:
+        if held > 0.8:
             qr_visible = not qr_visible
             print("QR toggled:", qr_visible)
         else:
@@ -173,8 +173,8 @@ def knob_button_callback(button):
 
 # Attach the knob button callbacks
 for pin, key in knob_buttons.items():
-    button = Button(pin)
-    button.when_pressed = lambda button=button: knob_button_callback(button)
+    button = Button(pin, bounce_time=0.03)
+    button.when_pressed = lambda button=button: knob_button_pressed(button)
     button.when_released = lambda button=button: knob_button_callback(button)
 
 last_knob_event = time.time()
@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
     # --- TUMIN: Generate QR after pygame init ---
     qr_img = qrcode_lib.make("https://www.instagram.com/layeraction/")
-    qr_img = qr_img.resize((280, 280))
+    qr_img = qr_img.resize((280, 280)).convert("RGB")
     qr_surface = pygame.image.fromstring(qr_img.tobytes(), qr_img.size, qr_img.mode)
     qr_font = settings.TechMono[18]
     # --------------------------------------------
@@ -246,7 +246,8 @@ if __name__ == "__main__":
             boy.handle_event(event)
             if hasattr(boy, 'active'):
                 boy.active.handle_event(event)
-        boy.render()
+        if not qr_visible:
+            boy.render()
         if qr_visible:
             overlay = pygame.Surface((480, 320), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 210))
